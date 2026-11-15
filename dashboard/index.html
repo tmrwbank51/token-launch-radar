@@ -1,4 +1,12 @@
 <!doctype html>
+<!-- Token Launch Radar: a board of the pre-token protocols in the sealed
+     DefiLlama snapshot, ranked by implied launch value, each with a farm
+     plan. The page runs with no network: its only data is the data.js file
+     beside it, written from the snapshot by main.ts. The value model is
+     documented in the "How the radar works" section below, the calibration
+     table beside it shows the evidence behind every multiple, and each
+     protocol's detail view recomputes its implied value from the snapshot's
+     own figures so the arithmetic can be checked line by line. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -76,19 +84,33 @@
   <div id="detail-body"></div>
 </dialog>
 
+<section class="categories">
+  <h2>Categories on the board</h2>
+  <p class="section-note">Where the board's value sits, by category: rows, TVL, the median implied value of the category's rows, and how many of them are on the watchlist. A category with a high median multiple is priced richly by the live-token protocols in it — see the calibration table below.</p>
+  <div class="table-wrap">
+    <table id="category-table">
+      <thead><tr><th>Category</th><th class="num">Rows</th><th class="num">Board TVL</th><th class="num">Median implied value</th><th class="num">Watchlist</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <p class="cat-note" id="cat-note"></p>
+</section>
+
 <section class="notes">
   <h2>How the radar works</h2>
   <div class="notes-grid">
     <div>
       <h3>The value model</h3>
-      <p>Every implied value is computed from the snapshot's own figures. The <strong>category multiple</strong> is the median market-cap-to-TVL ratio of the protocols in the same category whose token already trades; categories with fewer than three such protocols use the global median. The <strong>growth factor</strong> follows the seven-day TVL change, clamped so one wild week cannot dominate. The <strong>maturity factor</strong> follows the days since listing, saturating past the first year. The <strong>footprint factor</strong> follows the number of chains. No protocol name is ever special-cased: the same formula ranks all 758 protocols.</p>
-      <p>Protocols whose token already trades never appear on the board. They are the calibration set only — the board is the protocols still to come, separated from the ones that already trade.</p>
+      <p>Every implied value is computed from the snapshot's own figures, by one formula applied to every protocol alike. The <strong>category multiple</strong> is the median market-cap-to-TVL ratio of the protocols in the same category whose token already trades; categories with fewer than three such protocols use the global median, and the calibration table marks them. The <strong>growth factor</strong> follows the seven-day TVL change, clamped so one wild week cannot dominate. The <strong>maturity factor</strong> follows the days since listing, saturating past the first year. The <strong>footprint factor</strong> follows the number of chains, capped at eight extra chains.</p>
+      <p>No protocol name is ever special-cased: the same formula ranks every protocol on the board. Protocols whose token already trades never appear on the board. They are the calibration set only — the board is the protocols still to come, separated from the ones that already trade.</p>
+      <p><strong>Reading a row:</strong> click it for the value breakdown, the reason it ranks where it does, the data signals behind it, and its farm plan. The check line under the breakdown recomputes the implied value from the snapshot's figures, so the arithmetic can be verified without trusting the table.</p>
+      <p class="worked" id="worked-example"></p>
     </div>
     <div>
       <h3>Calibration set</h3>
-      <p>Median market-cap-to-TVL multiple per category, from the protocols whose token already trades:</p>
+      <p>Median market-cap-to-TVL multiple per category, from the protocols whose token already trades, with the interquartile range (the middle half of the category's own ratios) and the count behind each multiple:</p>
       <table class="calibration" id="calibration">
-        <thead><tr><th>Category</th><th class="num">Multiple</th><th class="num">Protocols</th></tr></thead>
+        <thead><tr><th>Category</th><th class="num">Multiple</th><th class="num">IQR</th><th class="num">Protocols</th></tr></thead>
         <tbody></tbody>
       </table>
       <p class="cal-note" id="cal-note"></p>
@@ -96,7 +118,7 @@
     <div>
       <h3>What counts as pre-token</h3>
       <p>A protocol records no token when both <code>gecko_id</code> and <code>symbol</code> are null in the snapshot. The board also leaves out wrapped, staked and bridged products of tokens that already trade, by the same exclusion the snapshot's own watchlist rule applies. Say a protocol <em>records</em> no token, never that it has none: a record can miss a token that exists.</p>
-      <p>Implied values are this entry's own claim, never make.fun's. Farm plans are starting points, not financial advice; check every step against the protocol's own pages before moving funds.</p>
+      <p><strong>Limits of this radar.</strong> The snapshot is frozen: prices, TVL and growth are one day's record, not a forecast. A median multiple is a category's middle, not a promise for any one protocol. Nothing here predicts whether or when a protocol issues a token. Implied values are this entry's own claim, never make.fun's. Farm plans are starting points, not financial advice; check every step against the protocol's own pages before moving funds.</p>
     </div>
   </div>
   <p class="source-note" id="source-note"></p>

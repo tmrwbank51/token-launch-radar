@@ -1,6 +1,25 @@
-// Token Launch Radar: the board's sorting, filtering, and detail view.
-// The data arrives in window.RADAR_DATA, written by main.ts from the sealed
-// snapshot. No network: everything on the page comes from that one object.
+// Token Launch Radar: the board's sorting, filtering, detail view, and
+// category breakdown. The data arrives in window.RADAR_DATA, written by
+// main.ts from the sealed snapshot. No network: everything on the page comes
+// from that one object.
+//
+// What the page shows, and where it comes from:
+// - The board: rows ranked by implied_value_usd, each row carrying the
+//   snapshot's own figures (TVL, 7d change, listing date, chains) and the
+//   four factors of its value breakdown. Sorting reorders the view only;
+//   the rank column is the model's claim and never changes.
+// - The detail view: the row's reasoning (why), its data signals, the value
+//   breakdown with a check line that recomputes the implied value in the
+//   page from the stored breakdown (recomputeValue, the same multiplication
+//   main.ts ran), and the farm plan. A farm plan is 6 to 8 steps: funding,
+//   two core actions for the protocol's category family, up to two steps the
+//   protocol's own traits earned (a second chain, fast growth, a sharp fall,
+//   a young or undated record, a single chain), then points, monitoring and
+//   record-keeping. Every step names an action, a cost and a time.
+// - The calibration table: the median market-cap-to-TVL multiple per
+//   category with its interquartile range and count, from the protocols
+//   whose token already trades; fallback rows use the global median.
+// - The category breakdown: the board's own aggregates per category.
 
 const D = window.RADAR_DATA;
 const $ = (id) => document.getElementById(id);
@@ -52,11 +71,10 @@ function renderStats() {
 }
 
 function renderMethodNote() {
-  const calibrated = D.calibration.reduce((sum, row) => sum + row.n, 0);
   $('method-note').textContent =
-    `Calibrated on ${calibrated} protocols whose token already trades, across ${D.calibration.length} categories ` +
-    `(global multiple ${D.global_multiple.toFixed(3)}×). Every row below records no token in the snapshot. ` +
-    `Click a row for its value breakdown and farm plan; click a column header to sort.`;
+    `Calibrated on ${D.calibration_live} protocols whose token already trades, across ${D.calibration.length} categories ` +
+    `(global multiple ${D.global_multiple.toFixed(3)}×, interquartile range ${D.global_q1.toFixed(3)}×–${D.global_q3.toFixed(3)}×). ` +
+    `Every row below records no token in the snapshot. Click a row for its value breakdown, its reasoning and its farm plan; click a column header to sort.`;
 }
 
 function renderSourceNote() {
@@ -69,14 +87,50 @@ function renderSourceNote() {
 function renderCalibration() {
   const body = document.querySelector('#calibration tbody');
   body.innerHTML = D.calibration
-    .map(
-      (row) =>
-        `<tr><td>${escapeHtml(row.category)}</td><td class="num">${row.multiple.toFixed(3)}×${row.fallback ? ' *' : ''}</td><td class="num">${row.n}</td></tr>`,
-    )
+    .map((row) => {
+      const iqr = row.q1 === null || row.q3 === null ? '—' : `${row.q1.toFixed(2)}–${row.q3.toFixed(2)}×`;
+      return `<tr><td>${escapeHtml(row.category)}</td><td class="num">${row.multiple.toFixed(3)}×${row.fallback ? ' *' : ''}</td><td class="num">${iqr}</td><td class="num">${row.n}</td></tr>`;
+    })
     .join('');
   if (D.calibration.some((row) => row.fallback)) {
-    $('cal-note').textContent = '* Global median: fewer than three live-token protocols in the category, so the category multiple falls back to the global one.';
+    $('cal-note').textContent = '* Global median: fewer than three live-token protocols in the category, so the category multiple falls back to the global one and no interquartile range is shown.';
   }
+}
+
+function renderCategories() {
+  const body = document.querySelector('#category-table tbody');
+  body.innerHTML = D.categories
+    .map(
+      (row) =>
+        `<tr><td>${escapeHtml(row.category)}</td><td class="num">${row.rows}</td><td class="num">${fmtUsd(row.tvl_usd)}</td><td class="num">${fmtUsd(row.median_implied_value_usd)}</td><td class="num">${row.watchlist}</td></tr>`,
+    )
+    .join('');
+}
+
+// The formula applied to the board's top row, computed live from its stored
+// breakdown: the worked example is never a hardcoded number.
+function renderWorkedExample() {
+  const top = D.rows.find((row) => row.rank === 1);
+  const b = top.value_breakdown;
+  $('worked-example').textContent =
+    `Worked example — ${top.name} (rank #1): ${fmtUsd(top.tvl_usd)} × ${b.category_multiple.toFixed(3)} × ` +
+    `${b.growth_factor.toFixed(3)} × ${b.maturity_factor.toFixed(3)} × ${b.footprint_factor.toFixed(3)} = ${fmtUsd(top.implied_value_usd)}.`;
+}
+
+// How concentrated the board's implied value is: the median row, and the
+// share the top 10 rows hold of the board's total.
+function renderCategoryNote() {
+  const values = D.rows.map((row) => row.implied_value_usd).sort((a, b) => a - b);
+  const mid = Math.floor(values.length / 2);
+  const medianValue = values.length % 2 === 1 ? values[mid] : (values[mid - 1] + values[mid]) / 2;
+  const total = values.reduce((sum, value) => sum + value, 0);
+  const top10 = [...D.rows]
+    .sort((a, b) => a.rank - b.rank)
+    .slice(0, 10)
+    .reduce((sum, row) => sum + row.implied_value_usd, 0);
+  $('cat-note').textContent =
+    `Across the board, the median implied value is ${fmtUsd(medianValue)} and the top 10 rows hold ${((top10 / total) * 100).toFixed(1)}% ` +
+    `of the board's total implied value of ${fmtUsd(total)}.`;
 }
 
 // The value model, recomputed in the page from the stored breakdown: the same
@@ -198,6 +252,7 @@ function openDetail(slug) {
       <span>${row.watchlist ? 'On the watchlist' : 'Below the watchlist floor'}</span>
       <span>Records no token</span>
     </p>
+    <p class="why">${escapeHtml(row.why)}</p>
     <h3>Implied value breakdown</h3>
     <table class="breakdown">
       <tr><td>TVL <span class="dim">(snapshot)</span></td><td>${fmtUsd(row.tvl_usd)}</td></tr>
@@ -208,6 +263,10 @@ function openDetail(slug) {
       <tr class="total"><td>Implied value</td><td>${fmtUsd(row.implied_value_usd)}</td></tr>
     </table>
     <p class="check-line">Check: ${fmtUsd(row.tvl_usd)} × ${b.category_multiple.toFixed(3)} × ${b.growth_factor.toFixed(3)} × ${b.maturity_factor.toFixed(3)} × ${b.footprint_factor.toFixed(3)} = ${fmtUsd(recomputeValue(row))}</p>
+    <h3>Signals</h3>
+    ${row.signals.length > 0
+      ? `<ul class="signals">${row.signals.map((signal) => `<li>${escapeHtml(signal)}</li>`).join('')}</ul>`
+      : `<p class="signals-none">No caution signals: growth and the listing date are reported, the category multiple rests on three or more live-token protocols, and TVL spans ${row.chains.length} chains.</p>`}
     <h3>Farm plan — ${row.farm_steps.length} steps</h3>
     <ol class="plan">${row.farm_steps.map((step) => `<li>${escapeHtml(step)}</li>`).join('')}</ol>
     <p class="meta">Implied value is this entry's own claim. The plan is a starting point, not financial advice.</p>`;
@@ -277,6 +336,9 @@ renderStats();
 renderMethodNote();
 renderSourceNote();
 renderCalibration();
+renderCategories();
+renderWorkedExample();
+renderCategoryNote();
 populateSelects();
 wireFilters();
 wireDialog();
