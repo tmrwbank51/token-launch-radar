@@ -1,12 +1,13 @@
 <!doctype html>
-<!-- Token Launch Radar: a board of the pre-token protocols in the sealed
-     DefiLlama snapshot, ranked by implied launch value, each with a farm
-     plan. The page runs with no network: its only data is the data.js file
-     beside it, written from the snapshot by main.ts. The value model is
-     documented in the "How the radar works" section below, the calibration
-     table beside it shows the evidence behind every multiple, and each
-     protocol's detail view recomputes its implied value from the snapshot's
-     own figures so the arithmetic can be checked line by line. -->
+<!-- Token Launch Radar (v3): the protocols in the sealed snapshot that
+     record no token, ranked by implied launch value, each with a costed,
+     timed farm plan. The page runs with no network: its only data is the
+     data.js file beside it, written from the snapshot by main.ts. The
+     value model lives in this page's own code (app.js): impliedValue
+     re-derives every submitted value, calibrateMultiple prices every
+     category, nearestComparables finds each row's live-token peers, and
+     costPlan totals every farm plan. The playground below re-runs the
+     model live; the recompute check verifies the submitted board. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -15,21 +16,53 @@
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
-<header class="top">
-  <div class="brand">
-    <div class="mark" aria-hidden="true"><span class="ring"></span><span class="dot"></span></div>
-    <div>
-      <h1>Token Launch Radar</h1>
-      <p class="tag">Which pre-token protocol is worth farming next — and what to do about it.</p>
-    </div>
+<header class="masthead">
+  <div class="masthead-inner">
+    <p class="kicker" id="kicker">Token Launch Radar</p>
+    <h1>Which protocol launches next — and what would it be worth?</h1>
+    <p class="lede">Every protocol in the sealed snapshot that records no token, ranked by one formula: what a launch would be worth if the record stayed as it is. Click a row for its reasoning, comparables, and costed farm plan.</p>
+    <div class="chips" id="stats"></div>
   </div>
-  <div class="chips" id="stats"></div>
 </header>
 
-<section class="method">
+<main>
+<section class="method-strip" aria-label="The model in one line">
   <p class="formula"><strong>Implied value</strong> = TVL &times; category multiple &times; growth &times; maturity &times; footprint</p>
   <p class="method-note" id="method-note"></p>
 </section>
+
+<section class="playground" id="playground" aria-label="Model playground">
+  <div class="section-head">
+    <h2>Model playground</h2>
+    <p class="section-note">The model that built this board, running in the page. Move a control and the board re-ranks live, from the same snapshot figures. The submitted board is the default settings; nothing you change here alters it.</p>
+  </div>
+  <div class="controls">
+    <label class="control">Growth weight <span class="control-value" id="growth-value">1.00&times;</span>
+      <input id="growth-weight" type="range" min="0" max="2" step="0.25" value="1" aria-label="Growth weight">
+      <span class="control-hint">0 = ignore 7d change &middot; 2 = double its effect</span>
+    </label>
+    <label class="control">Maturity strength <span class="control-value" id="maturity-value">1.00&times;</span>
+      <input id="maturity-strength" type="range" min="0" max="2" step="0.25" value="1" aria-label="Maturity strength">
+      <span class="control-hint">0 = ignore age &middot; 2 = double its effect</span>
+    </label>
+    <label class="control">Multiple source
+      <select id="multiple-source">
+        <option value="category">Category median (submitted)</option>
+        <option value="global">Global median</option>
+        <option value="q1">Lower quartile (conservative)</option>
+        <option value="q3">Upper quartile (optimistic)</option>
+      </select>
+      <span class="control-hint">Fallback rows use the global quartiles</span>
+    </label>
+    <label class="control check-control"><input id="footprint-on" type="checkbox" checked> Count the multi-chain footprint
+      <span class="control-hint">Uncheck to price every protocol as single-chain</span>
+    </label>
+  </div>
+  <div class="playground-foot">
+    <p class="check-line" id="recompute-check"></p>
+    <button id="playground-reset" type="button">Reset to submitted defaults</button>
+  </div>
+  <p class="adjusted-banner" id="adjusted-banner" hidden></p></section>
 
 <section class="filters" aria-label="Filter the board">
   <label class="field grow">Search
@@ -51,30 +84,74 @@
     </select>
   </label>
   <label class="check"><input id="watchlist-only" type="checkbox"> Watchlist only</label>
-  <button id="reset" type="button">Reset</button>
+  <button id="reset" type="button">Reset filters</button>
 </section>
 
-<main>
+<p class="count" id="count"></p>
+<div class="table-wrap">
+  <table id="board">
+    <thead>
+      <tr>
+        <th data-sort="rank" class="num sorted">Rank</th>
+        <th data-sort="name">Protocol</th>
+        <th data-sort="category">Category</th>
+        <th data-sort="tvl_usd" class="num">TVL</th>
+        <th data-sort="change_7d" class="num">7d</th>
+        <th data-sort="implied_value_usd" class="num">Implied value</th>
+        <th class="num">Multiple</th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+</div>
+
+<section class="charts" aria-label="Charts">
+  <h2>Value against size</h2>
+  <p class="section-note">Each dot is one ranked protocol, on logarithmic scales. Amber dots are watchlist rows. A dot above the pack earns its rank from its multiple and its factors, not from size alone.</p>
+  <div id="scatter" role="img" aria-label="Scatter plot of implied value against TVL"></div>
+  <h2>Where the board's value sits</h2>
+  <p class="section-note">Board TVL by category, with the row count and the share of the board. The bars are the share; the table is the evidence.</p>
   <div class="table-wrap">
-    <table id="board">
-      <thead>
-        <tr>
-          <th data-sort="rank" class="num sorted">Rank</th>
-          <th data-sort="name">Protocol</th>
-          <th data-sort="category">Category</th>
-          <th data-sort="chains">Chains</th>
-          <th data-sort="tvl_usd" class="num">TVL</th>
-          <th data-sort="change_7d" class="num">7d</th>
-          <th data-sort="age_days" class="num">Age</th>
-          <th data-sort="implied_value_usd" class="num">Implied value</th>
-          <th class="num">Farm steps</th>
-        </tr>
-      </thead>
-      <tbody id="rows"></tbody>
+    <table id="category-table">
+      <thead><tr><th>Category</th><th class="num">Rows</th><th class="num">Board TVL</th><th class="num">Share</th><th class="bar-col">Distribution</th></tr></thead>
+      <tbody></tbody>
     </table>
   </div>
-  <p class="count" id="count"></p>
+</section>
+
+<section class="memo" aria-label="Methodology memo">
+  <p class="memo-kicker">Methodology memo</p>
+  <h2>How this radar is built, and what it cannot say</h2>
+  <h3>Thesis</h3>
+  <p>A protocol that holds large value, keeps growing, and has run for a long time without a token is the likeliest kind of protocol to launch one — and the market already prices that kind of protocol, through the tokens that trade in its category. So the radar prices every pre-token protocol by the category's own median market-cap-to-TVL ratio, adjusted for its growth, its age, and its footprint. One formula, every protocol alike, no name ever special-cased. Protocols whose token already trades never appear on the board: they are the calibration set only, the board is the protocols still to come.</p>
+  <h3>Calibration study</h3>
+  <p id="calib-summary"></p>
+  <div class="table-wrap">
+    <table class="calibration" id="calibration">
+      <thead><tr><th>Category</th><th class="num">Multiple</th><th class="num">IQR</th><th class="num">Protocols</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <p class="cal-note" id="cal-note"></p>
+  <h3>Worked example</h3>
+  <div id="worked-example"></div>
+  <h3>Limitations, stated plainly</h3>
+  <ul class="limits">
+    <li>The snapshot is frozen: TVL, growth and prices are one day's record, not a forecast. A protocol can halve in a week.</li>
+    <li>A median multiple is a category's middle, not a promise for any one protocol. The interquartile range beside each multiple shows how wide the category's own ratios run.</li>
+    <li>Nothing here predicts whether or when a protocol issues a token. Some never will; some record no token only because the record misses one.</li>
+    <li>Farm-plan costs are gas estimates for ordinary transactions; congestion moves them, and bridge tolls sit outside the totals. Times are active work across an 8–12 week horizon, including weekly checks.</li>
+    <li>TVL can be gamed, borrowed, or double-counted across chains. The signals on each row flag what the model did not know.</li>
+  </ul>
+  <h3>How to audit this page</h3>
+  <p>Every number here is computed in this dossier's own code from the sealed snapshot — the board by the builder, the playground and the checks by the page itself. Nothing is pasted, nothing is fetched. The recompute check above re-derives every submitted value from the snapshot's figures; each row's detail view shows its own arithmetic, its nearest live-token comparables, and the cost and time of every farm step. Say a protocol <em>records</em> no token, never that it has none: a record can miss a token that exists.</p>
+  <p class="source-note" id="source-note"></p>
+</section>
 </main>
+
+<footer>
+  <p>Token Launch Radar · data frozen in the sealed snapshot · the page runs with no network · implied values are this entry's own claim, never make.fun's.</p>
+</footer>
 
 <dialog id="detail" aria-label="Protocol detail">
   <div class="dialog-head">
@@ -83,50 +160,6 @@
   </div>
   <div id="detail-body"></div>
 </dialog>
-
-<section class="categories">
-  <h2>Categories on the board</h2>
-  <p class="section-note">Where the board's value sits, by category: rows, TVL, the median implied value of the category's rows, and how many of them are on the watchlist. A category with a high median multiple is priced richly by the live-token protocols in it — see the calibration table below.</p>
-  <div class="table-wrap">
-    <table id="category-table">
-      <thead><tr><th>Category</th><th class="num">Rows</th><th class="num">Board TVL</th><th class="num">Median implied value</th><th class="num">Watchlist</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </div>
-  <p class="cat-note" id="cat-note"></p>
-</section>
-
-<section class="notes">
-  <h2>How the radar works</h2>
-  <div class="notes-grid">
-    <div>
-      <h3>The value model</h3>
-      <p>Every implied value is computed from the snapshot's own figures, by one formula applied to every protocol alike. The <strong>category multiple</strong> is the median market-cap-to-TVL ratio of the protocols in the same category whose token already trades; categories with fewer than three such protocols use the global median, and the calibration table marks them. The <strong>growth factor</strong> follows the seven-day TVL change, clamped so one wild week cannot dominate. The <strong>maturity factor</strong> follows the days since listing, saturating past the first year. The <strong>footprint factor</strong> follows the number of chains, capped at eight extra chains.</p>
-      <p>No protocol name is ever special-cased: the same formula ranks every protocol on the board. Protocols whose token already trades never appear on the board. They are the calibration set only — the board is the protocols still to come, separated from the ones that already trade.</p>
-      <p><strong>Reading a row:</strong> click it for the value breakdown, the reason it ranks where it does, the data signals behind it, and its farm plan. The check line under the breakdown recomputes the implied value from the snapshot's figures, so the arithmetic can be verified without trusting the table.</p>
-      <p class="worked" id="worked-example"></p>
-    </div>
-    <div>
-      <h3>Calibration set</h3>
-      <p>Median market-cap-to-TVL multiple per category, from the protocols whose token already trades, with the interquartile range (the middle half of the category's own ratios) and the count behind each multiple:</p>
-      <table class="calibration" id="calibration">
-        <thead><tr><th>Category</th><th class="num">Multiple</th><th class="num">IQR</th><th class="num">Protocols</th></tr></thead>
-        <tbody></tbody>
-      </table>
-      <p class="cal-note" id="cal-note"></p>
-    </div>
-    <div>
-      <h3>What counts as pre-token</h3>
-      <p>A protocol records no token when both <code>gecko_id</code> and <code>symbol</code> are null in the snapshot. The board also leaves out wrapped, staked and bridged products of tokens that already trade, by the same exclusion the snapshot's own watchlist rule applies. Say a protocol <em>records</em> no token, never that it has none: a record can miss a token that exists.</p>
-      <p><strong>Limits of this radar.</strong> The snapshot is frozen: prices, TVL and growth are one day's record, not a forecast. A median multiple is a category's middle, not a promise for any one protocol. Nothing here predicts whether or when a protocol issues a token. Implied values are this entry's own claim, never make.fun's. Farm plans are starting points, not financial advice; check every step against the protocol's own pages before moving funds.</p>
-    </div>
-  </div>
-  <p class="source-note" id="source-note"></p>
-</section>
-
-<footer>
-  <p>Token Launch Radar · data frozen in the sealed snapshot · the page runs with no network.</p>
-</footer>
 
 <script src="../data.js"></script>
 <script src="app.js"></script>
