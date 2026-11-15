@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token Launch Radar — pre-token protocols ranked by implied launch value</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <div class="mark" aria-hidden="true"><span class="ring"></span><span class="dot"></span></div>
+    <div>
+      <h1>Token Launch Radar</h1>
+      <p class="tag">Which pre-token protocol is worth farming next — and what to do about it.</p>
+    </div>
+  </div>
+  <div class="chips" id="stats"></div>
+</header>
+
+<section class="method">
+  <p class="formula"><strong>Implied value</strong> = TVL &times; category multiple &times; growth &times; maturity &times; footprint</p>
+  <p class="method-note" id="method-note"></p>
+</section>
+
+<section class="filters" aria-label="Filter the board">
+  <label class="field grow">Search
+    <input id="q" type="search" placeholder="Protocol name or slug…" autocomplete="off">
+  </label>
+  <label class="field">Category
+    <select id="category"><option value="all">All categories</option></select>
+  </label>
+  <label class="field">Chain
+    <select id="chain"><option value="all">All chains</option></select>
+  </label>
+  <label class="field">Min TVL
+    <select id="min-tvl">
+      <option value="0">Any TVL</option>
+      <option value="50000000">$50M+ (watchlist floor)</option>
+      <option value="100000000">$100M+</option>
+      <option value="250000000">$250M+</option>
+      <option value="1000000000">$1B+</option>
+    </select>
+  </label>
+  <label class="check"><input id="watchlist-only" type="checkbox"> Watchlist only</label>
+  <button id="reset" type="button">Reset</button>
+</section>
+
+<main>
+  <div class="table-wrap">
+    <table id="board">
+      <thead>
+        <tr>
+          <th data-sort="rank" class="num sorted">Rank</th>
+          <th data-sort="name">Protocol</th>
+          <th data-sort="category">Category</th>
+          <th data-sort="chains">Chains</th>
+          <th data-sort="tvl_usd" class="num">TVL</th>
+          <th data-sort="change_7d" class="num">7d</th>
+          <th data-sort="age_days" class="num">Age</th>
+          <th data-sort="implied_value_usd" class="num">Implied value</th>
+          <th class="num">Farm steps</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <p class="count" id="count"></p>
+</main>
+
+<dialog id="detail" aria-label="Protocol detail">
+  <div class="dialog-head">
+    <h2 id="detail-title"></h2>
+    <button id="detail-close" type="button" aria-label="Close">✕</button>
+  </div>
+  <div id="detail-body"></div>
+</dialog>
+
+<section class="notes">
+  <h2>How the radar works</h2>
+  <div class="notes-grid">
+    <div>
+      <h3>The value model</h3>
+      <p>Every implied value is computed from the snapshot's own figures. The <strong>category multiple</strong> is the median market-cap-to-TVL ratio of the protocols in the same category whose token already trades; categories with fewer than three such protocols use the global median. The <strong>growth factor</strong> follows the seven-day TVL change, clamped so one wild week cannot dominate. The <strong>maturity factor</strong> follows the days since listing, saturating past the first year. The <strong>footprint factor</strong> follows the number of chains. No protocol name is ever special-cased: the same formula ranks all 758 protocols.</p>
+      <p>Protocols whose token already trades never appear on the board. They are the calibration set only — the board is the protocols still to come, separated from the ones that already trade.</p>
+    </div>
+    <div>
+      <h3>Calibration set</h3>
+      <p>Median market-cap-to-TVL multiple per category, from the protocols whose token already trades:</p>
+      <table class="calibration" id="calibration">
+        <thead><tr><th>Category</th><th class="num">Multiple</th><th class="num">Protocols</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="cal-note" id="cal-note"></p>
+    </div>
+    <div>
+      <h3>What counts as pre-token</h3>
+      <p>A protocol records no token when both <code>gecko_id</code> and <code>symbol</code> are null in the snapshot. The board also leaves out wrapped, staked and bridged products of tokens that already trade, by the same exclusion the snapshot's own watchlist rule applies. Say a protocol <em>records</em> no token, never that it has none: a record can miss a token that exists.</p>
+      <p>Implied values are this entry's own claim, never make.fun's. Farm plans are starting points, not financial advice; check every step against the protocol's own pages before moving funds.</p>
+    </div>
+  </div>
+  <p class="source-note" id="source-note"></p>
+</section>
+
+<footer>
+  <p>Token Launch Radar · data frozen in the sealed snapshot · the page runs with no network.</p>
+</footer>
+
+<script src="../data.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
